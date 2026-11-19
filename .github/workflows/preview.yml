@@ -1,0 +1,57 @@
+# Publishes the digest preview to GitHub Pages (ADR 0003). The HTML is built here and shipped as a
+# Pages artifact, so the preview never lands in the repo or its history. Run it with this lane's
+# marker for review; run it again with the marker empty to take the marker off the same link.
+name: preview
+
+on:
+  workflow_dispatch:
+    inputs:
+      marker:
+        description: LANE_MARKER for the banner (leave empty for "no marker set")
+        required: false
+        default: ''
+      night:
+        description: Night to render
+        required: false
+        default: '2026-10-28'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Save the page
+        env:
+          LANE_MARKER: ${{ inputs.marker }}
+          NIGHT: ${{ inputs.night }}
+        run: pnpm preview "$NIGHT"
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: var/preview
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
